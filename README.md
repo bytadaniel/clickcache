@@ -42,7 +42,7 @@ const chunk = resolver.cache('table', rows)
 
 chunk.isOverfilled() // boolean
 chunk.isExpired() // boolean
-chunk.isUnbliocked() // boolean
+chunk.isUnblocked() // boolean
 chunk.block()
 chunk.unblock()
 chunk.size // length
