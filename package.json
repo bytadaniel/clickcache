@@ -1,6 +1,6 @@
 {
   "name": "chcache",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "Clickhouse data collector for delayed batch insert",
   "main": "index.js",
   "files": [
