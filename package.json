@@ -11,7 +11,26 @@
     "test": "jest",
     "lint": "eslint . --ext .ts"
   },
-  "keywords": [],
+  "keywords": [
+    "clickhouse",
+    "batch",
+    "insert",
+    "cache",
+    "in-memory",
+    "ram",
+    "disk",
+    "s3",
+    "clickhouse-ts",
+    "chvalid"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bytadaniel/clickcache.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bytadaniel/clickcache/issues"
+  },
+  "homepage": "https://github.com/bytadaniel/clickcache#readme",
   "author": "@bytadaniel Daniel Byta",
   "license": "MIT",
   "devDependencies": {

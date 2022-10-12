@@ -1,4 +1,4 @@
-# chcache by @bytadaniel
+# clickcache by @bytadaniel
 
 ![Travis (.org)](https://img.shields.io/travis/bytadaniel/chcache)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/bytadaniel/chcache)
