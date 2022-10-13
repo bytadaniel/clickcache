@@ -9,7 +9,7 @@
     "*.json"
   ],
   "scripts": {
-    "build": "tsc -d",
+    "build": "rm -rf lib && tsc -d",
     "test": "jest",
     "lint": "eslint . --ext .ts"
   },
