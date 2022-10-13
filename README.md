@@ -5,6 +5,8 @@
 ![npms.io (final)](https://img.shields.io/npms-io/final-score/chcache)
 ![GitHub issues](https://img.shields.io/github/issues/bytadaniel/chcache)
 
+![Gitter](https://img.shields.io/gitter/room/bytadaniel/clickcache)
+
 ![GitHub followers](https://img.shields.io/github/followers/bytadaniel?style=social)
 
 
