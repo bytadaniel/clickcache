@@ -1,10 +1,10 @@
-import { uniqBy } from 'lodash'
 import { EventEmitter } from 'stream'
 import { Chunk } from './сhunk'
 import { ResolverOptions, InsertRow } from './interface'
 import { ChunkPool } from './pool'
 import { CacheError } from './errors'
 import { Events, E_CODES } from './constants'
+import { uniqBy } from './utils'
 
 type OnResolved = (chunk: Chunk) => void | Promise<void>
 
