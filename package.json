@@ -11,6 +11,7 @@
   "scripts": {
     "build": "rm -rf lib && tsc -d",
     "test": "jest",
+    "coveralls": "coveralls",
     "lint": "eslint . --ext .ts"
   },
   "keywords": [

@@ -32,10 +32,15 @@ const config = {
   checkIntervalMs: 10_000
 }
 
-const resolver = new ChunkResolver(new InMemoryPool(), config)
+const resolver = new ChunkResolver(new ProcessDataTracker(), config)
 
 resolver.onResolved(chunk => {
-  handleInsertion(chunk.table, chunk.getRows())
+  handleInsertion(
+    chunk.table,
+    chunk.getRows().then(rows => {
+      // fooboo
+    })
+  )
 })
 
 onGracefulStutdown(() => resolver.resolveImmediately())

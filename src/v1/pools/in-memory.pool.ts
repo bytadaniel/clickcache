@@ -40,12 +40,12 @@ export class InMemoryPool extends ChunkPool {
 	}
 
 	/**
-	 * Add new chunk to table set
+	 * Appending some chunk to a table chunk registry
 	 * 
 	 * @param {Table} table table name
 	 * @param {Chunk} chunk ref
 	 */
-	public appendChunk (table: Table, chunk: Chunk) {
+	#appendChunk (table: Table, chunk: Chunk) {
 		const tablePool = this.#getAssertedTablePool(table)
 		if (!tablePool.has(chunk)) {
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -127,7 +127,7 @@ export class InMemoryPool extends ChunkPool {
 
 		if (!firstUnblockedChunk) {
 			firstUnblockedChunk = new Chunk(table, this.getTtlMs())
-			this.appendChunk(table, firstUnblockedChunk)
+			this.#appendChunk(table, firstUnblockedChunk)
 		}
 
 		return firstUnblockedChunk

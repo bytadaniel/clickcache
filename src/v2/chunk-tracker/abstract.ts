@@ -1,5 +1,5 @@
-import { Chunk } from './сhunk'
-import { Table, ChunkId } from './interface'
+import { Chunk } from '../chunk'
+import { Table, ChunkId } from '../interface'
 
 /**
  * Class representing a pool for row chunks
@@ -53,15 +53,6 @@ export abstract class ChunkPool {
 	public getMaxSize (): number {
 		return this.maxSize
 	}
-
-
-	/**
-	 * Appending some chunk to a table chunk registry
-	 * 
-	 * @param {Table} table
-	 * @param {Chunk} chunk
-	 */
-	abstract appendChunk (table: Table, chunk: Chunk): void
 
 	/**
 	 * Remove some single chunk from registry
