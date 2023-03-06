@@ -1,5 +1,7 @@
 # clickcache by @bytadaniel
 
+[![Join the chat at https://gitter.im/bytadaniel/clickcache](https://badges.gitter.im/bytadaniel/clickcache.svg)](https://gitter.im/bytadaniel/clickcache?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 ![Travis (.org)](https://img.shields.io/travis/bytadaniel/chcache)
 ![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/bytadaniel/chcache)
 ![npms.io (final)](https://img.shields.io/npms-io/final-score/chcache)
