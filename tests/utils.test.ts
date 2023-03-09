@@ -1,4 +1,4 @@
-import { uniqBy } from '../src/v2/utils'
+import { uniqBy } from '../src/utils'
 
 describe('uniqBy', () => {
     it('should uniq by key', () => {

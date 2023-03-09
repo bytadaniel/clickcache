@@ -1,6 +1,7 @@
-import { Chunk } from '../сhunk'
-import { Table, ChunkId } from '../interface'
-import { ChunkPool } from '../pool'
+import { Chunk } from '../chunk'
+import { ChunkId, Table } from '../interface'
+import { ChunkPool } from './abstract'
+import { DataWatcher } from '../watchers/abstract'
 
 /**
  * InMemoryPool is a subset of ChunkPool abstraction
@@ -14,14 +15,18 @@ import { ChunkPool } from '../pool'
  * 1. When OS sends to a process SIGKILL code which is killing your process without grace
  * 2. When some piece of data contains anomalies such as `undefined` etc
  */
-export class InMemoryPool extends ChunkPool {
+export class ChunkTracker extends ChunkPool {
 	#chunks: Map<Table, Set<Chunk>>
+	#dataWatcher: DataWatcher
 
 	/**
 	 * Create InMemoryPool instance
 	 */
-	constructor () {
+	constructor (
+		dataWatcher: DataWatcher
+	) {
 		super()
+		this.#dataWatcher = dataWatcher
 		this.#chunks = new Map<Table, Set<Chunk>>()
 	}
 
@@ -126,7 +131,7 @@ export class InMemoryPool extends ChunkPool {
 		}
 
 		if (!firstUnblockedChunk) {
-			firstUnblockedChunk = new Chunk(table, this.getTtlMs())
+			firstUnblockedChunk = new Chunk(this.#dataWatcher, table, this.getTtlMs())
 			this.#appendChunk(table, firstUnblockedChunk)
 		}
 

@@ -1,10 +1,11 @@
 import { EventEmitter } from 'stream'
-import { Chunk } from './сhunk'
+import { Chunk } from './chunk'
 import { ResolverOptions, InsertRow } from './interface'
-import { ChunkPool } from './pool'
 import { CacheError } from './errors'
 import { Events, E_CODES } from './constants'
 import { uniqBy } from './utils'
+import { ChunkTracker } from './chunk-tracker/chunk-tracker'
+import { DataWatcher } from './watchers/abstract'
 
 type OnResolved = (chunk: Chunk) => void | Promise<void>
 
@@ -14,7 +15,7 @@ type OnResolved = (chunk: Chunk) => void | Promise<void>
  * and provides an API for interacting "outside"
  */
 export class ChunkResolver {
-	#pool: ChunkPool
+	#chunkTracker: ChunkTracker
 	#emitter: EventEmitter
 	#options: ResolverOptions
 	#interval: NodeJS.Timer
@@ -26,12 +27,12 @@ export class ChunkResolver {
 	 * @param {ChunkPool} chunkPool any type of pool
 	 * @param {ResolverOptions} options 
 	 */
-	constructor (chunkPool: ChunkPool, options: ResolverOptions) {
-		this.#pool = chunkPool
+	constructor (dataWatcher: DataWatcher, options: ResolverOptions) {
+		this.#chunkTracker = new ChunkTracker(dataWatcher)
 		this.#options = options
 
-		this.#pool.setTtlMs(options.ttlMs)
-		this.#pool.setMaxSize(options.maxSize)
+		this.#chunkTracker.setTtlMs(options.ttlMs)
+		this.#chunkTracker.setMaxSize(options.maxSize)
 		
 		this.#allowCache = true
 		this.#emitter = new EventEmitter()
@@ -49,18 +50,18 @@ export class ChunkResolver {
 	 * 4. Throwing then outside
 	 */
 	#resolveConditionally () {
-		for (const table of this.#pool.getTables()) {
-			const currentPoolSnapshot = this.#pool.getChunks(table)
+		for (const table of this.#chunkTracker.getTables()) {
+			const currentPoolSnapshot = this.#chunkTracker.getChunks(table)
 	
 			const expiredChunks = currentPoolSnapshot.filter(chunk => chunk.isExpired())
-			const overfilledChunks = currentPoolSnapshot.filter(chunk => chunk.isOverfilled(this.#pool.maxSize))
+			const overfilledChunks = currentPoolSnapshot.filter(chunk => chunk.isOverfilled(this.#chunkTracker.maxSize))
 	
 			expiredChunks.forEach(chunk => chunk.block())
 			overfilledChunks.forEach(chunk => chunk.block())
 	
 			const resolveChunks = uniqBy([...expiredChunks, ...overfilledChunks], chunk => chunk.id)
 	
-			this.#pool.removeChunks(table, resolveChunks.map(chunk => chunk.id))
+			this.#chunkTracker.removeChunks(table, resolveChunks.map(chunk => chunk.id))
 	
 			resolveChunks.forEach(chunk => this.#emitter.emit(Events.ChunkResolved, chunk))
 		}
@@ -77,14 +78,14 @@ export class ChunkResolver {
 	 * @param {InsertRow[]} rows list of rows
 	 * @returns 
 	 */
-	public cache (table: string, rows: InsertRow[]) {
+	public async cache (table: string, rows: InsertRow[]) {
 		if (!this.#allowCache) {
 			throw new CacheError(E_CODES.E_CACHE_FORBIDDEN)
 		}
-		const unblockedChunk = this.#pool.getUnblockedChunk(table)
-		unblockedChunk.appendRows([...rows])
+		const unblockedChunk = this.#chunkTracker.getUnblockedChunk(table)
+		unblockedChunk.$appendRows([...rows])
 
-		if (unblockedChunk.isExpired() || unblockedChunk.isOverfilled(this.#pool.getMaxSize())) {
+		if (unblockedChunk.isExpired() || await unblockedChunk.isOverfilled(this.#chunkTracker.getMaxSize())) {
 			unblockedChunk.block()
 		}
 
@@ -105,10 +106,10 @@ export class ChunkResolver {
 	public resolveImmediately () {
 		this.#allowCache = false
 		this.stop()
-		this.#pool.getTables().forEach(table => {
-			this.#pool.getChunks(table).forEach(chunk => {
+		this.#chunkTracker.getTables().forEach(table => {
+			this.#chunkTracker.getChunks(table).forEach(chunk => {
 				chunk.block()
-				this.#pool.removeChunk(table, chunk.id)
+				this.#chunkTracker.removeChunk(table, chunk.id)
 				this.#emitter.emit(Events.ChunkResolved, chunk)
 			})
 		})

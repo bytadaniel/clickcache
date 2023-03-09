@@ -1,4 +1,4 @@
-import { DataTracker, StoreContract } from "./abstract";
+import { DataWatcher, StoreContract } from "./abstract";
 import { RowContract } from "../row";
 import { EventEmitter } from "stream";
 import { ChunkId } from "../interface";
@@ -8,7 +8,7 @@ enum Events {
   Unblock = 'unblock'
 }
 
-export class ProcessDataTracker extends DataTracker {
+export class ProcessWatcher extends DataWatcher {
   readonly #chunkStore: Record<ChunkId, RowContract[]>;
   #writeable: boolean;
   #emitter: EventEmitter;
