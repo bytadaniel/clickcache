@@ -34,7 +34,7 @@ const config = {
   checkIntervalMs: 10_000
 }
 
-const resolver = new ChunkResolver(new ProcessDataTracker(), config)
+const resolver = new ChunkResolver(new ProcessWatcher(), config)
 
 resolver.onResolved(chunk => {
   handleInsertion(

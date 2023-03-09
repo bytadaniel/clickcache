@@ -24,7 +24,7 @@ export class ChunkResolver {
 	/**
 	 * Create ChunkResolver instance
 	 * 
-	 * @param {ChunkPool} chunkPool any type of pool
+	 * @param {DataWatcher} dataWatcher any type of watcher
 	 * @param {ResolverOptions} options 
 	 */
 	constructor (dataWatcher: DataWatcher, options: ResolverOptions) {
@@ -42,7 +42,7 @@ export class ChunkResolver {
 	/**
 	 * Private method to resolve chunks
 	 * 1. Iterating evety chunk of every table to check
-	 * - if chunck is overfilled by rows and reached the limit
+	 * - if c hunck is overfilledby rows and reached the limit
 	 * - if chunk is expired by time
 	 * 
 	 * 2. Block all matched chunks
@@ -83,7 +83,8 @@ export class ChunkResolver {
 			throw new CacheError(E_CODES.E_CACHE_FORBIDDEN)
 		}
 		const unblockedChunk = this.#chunkTracker.getUnblockedChunk(table)
-		unblockedChunk.$appendRows([...rows])
+
+		await unblockedChunk.$appendRows([...rows])
 
 		if (unblockedChunk.isExpired() || await unblockedChunk.isOverfilled(this.#chunkTracker.getMaxSize())) {
 			unblockedChunk.block()
