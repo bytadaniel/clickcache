@@ -7,7 +7,7 @@ export interface StoreContract {
   rows: Row[]
 }
 
-export abstract class DataTracker {
+export abstract class DataWatcher {
   public abstract store (storeContract: StoreContract): Promise<void>
   public abstract getRowCount(chunkId: ChunkId): Promise<number>
   public abstract restore(chunkId: ChunkId): Promise<StoreContract>

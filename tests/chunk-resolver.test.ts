@@ -1,10 +1,10 @@
-import { Chunk } from '../src/v2/chunk'
-import { ChunkResolver } from '../src/v2/chunk-resolver'
-import { ResolverOptions } from '../src/v2/interface'
-import { ProcessDataTracker } from '../src/v2/data-tracker/process.data-tracker'
+import { Chunk } from '../src/chunk'
+import { ChunkResolver } from '../src/chunk-resolver'
+import { ResolverOptions } from '../src/interface'
+import { ProcessWatcher } from '../src/watchers/process.watcher'
 
 function createResolver (options: ResolverOptions) {
-	return new ChunkResolver(new ProcessDataTracker(), options)
+	return new ChunkResolver(new ProcessWatcher(), options)
 }
 
 function wait(ms: number) {

@@ -1,6 +1,6 @@
 import cuid from 'cuid'
 import { ChunkId, Table } from './interface'
-import { DataTracker } from './data-tracker/abstract'
+import { DataWatcher } from './watchers/abstract'
 import { Row } from './row'
 
 /**
@@ -20,7 +20,7 @@ export class Chunk {
 	createdAt: number
 	expiresAt: number
 	blocked: boolean
-  #dataTracker: DataTracker
+  #dataWatcher: DataWatcher
 
 	/**
 	 * Create Chunk instance
@@ -29,12 +29,12 @@ export class Chunk {
 	 * @param {number} liveAtLeastMs 
 	 */
 	constructor (
-    dataTracker: DataTracker,
+    dataWatcher: DataWatcher,
 		table: Table,
 		liveAtLeastMs: number
 	) {
 		this.table = table
-    this.#dataTracker = dataTracker
+    this.#dataWatcher = dataWatcher
 		this.blocked = false
 		this.size = 0
 
@@ -59,7 +59,7 @@ export class Chunk {
 	 * @returns {boolean}
 	 */
 	public async isOverfilled (limit: number): Promise<boolean> {
-    return await this.#dataTracker.getRowCount(this.id) >= limit
+    return await this.#dataWatcher.getRowCount(this.id) >= limit
 	}
 
 	/**
@@ -92,7 +92,7 @@ export class Chunk {
 	 * @returns {Row[]}
 	 */
 	public async getRows (): Promise<Row[]> {
-		return this.#dataTracker
+		return this.#dataWatcher
 			.restore(this.id)
 			.then(storeContract => storeContract.rows)
 	}
@@ -103,7 +103,7 @@ export class Chunk {
 	 * @param {Row[]} rows
 	 */
 	public async $appendRows (rows: Row[]) {
-    await this.#dataTracker.store({
+    await this.#dataWatcher.store({
       chunkId: this.id,
       table: this.table,
       rows
