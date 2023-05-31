@@ -79,7 +79,7 @@ export class ChunkResolver {
 		}
 
 		if (!availableChunks) {
-			this.stop()
+			clearInterval(this.#interval)
 		}
 	}
 
@@ -95,6 +95,8 @@ export class ChunkResolver {
 	 * @returns 
 	 */
 	public async cache (table: string, rows: InsertRow[]) {
+		this.#start()
+
 		if (!this.#allowCache) {
 			throw new CacheError(E_CODES.E_CACHE_FORBIDDEN)
 		}
@@ -122,7 +124,7 @@ export class ChunkResolver {
 	 */
 	public resolveImmediately () {
 		this.#allowCache = false
-		this.stop()
+
 		this.#chunkTracker.getTables().forEach(table => {
 			this.#chunkTracker.getChunks(table).forEach(chunk => {
 				chunk.block()
