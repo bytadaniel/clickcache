@@ -23,7 +23,7 @@ export class ChunkResolver {
 	#chunkTracker: ChunkTracker
 	#emitter: EventEmitter
 	#options: ResolverOptions
-	#interval: NodeJS.Timer
+	#interval: NodeJS.Timer | null
 	#allowCache: boolean
 	#watchQueue: boolean
 
@@ -44,8 +44,7 @@ export class ChunkResolver {
 		this.#emitter = new EventEmitter()
 
 		this.#watchQueue = false
-		this.#interval = {} as NodeJS.Timer // pass
-		this.#start() // create real NodeJS.Timer
+		this.#interval = null
 	}
 
 	/**
@@ -79,7 +78,7 @@ export class ChunkResolver {
 		}
 
 		if (!availableChunks) {
-			clearInterval(this.#interval)
+			this.#interval && clearInterval(this.#interval)
 		}
 	}
 
@@ -151,6 +150,7 @@ export class ChunkResolver {
 	 * @param {OnResolvedAsync} onResolved - The asynchronous callback function to be invoked for each resolved chunk.
 	 */
 	public onAsyncResolved (onResolved: OnResolvedAsync) {
+		this.#watchQueue = true
 		const queue = new Queue<Chunk>()
 		this.#emitter.on(Events.ChunkResolved, (chunk: Chunk) => queue.enqueue(chunk))
 
@@ -171,7 +171,9 @@ export class ChunkResolver {
 	 */
 	#start () {
 		this.#watchQueue = true
-		this.#interval = setInterval(() => this.#resolveConditionally(), this.#options.checkIntervalMs)
+		if (!this.#interval) {
+			this.#interval = setInterval(() => this.#resolveConditionally(), this.#options.checkIntervalMs)
+		}
 	}
 
 	/**
@@ -179,6 +181,6 @@ export class ChunkResolver {
 	 */
 	public stop () {
 		this.#watchQueue = false
-		clearInterval(this.#interval)
+		this.#interval && clearInterval(this.#interval)
 	}
 }
