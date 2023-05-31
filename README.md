@@ -47,7 +47,7 @@ resolver.onResolved(chunk => {
 })
 
 // enqueued async resolving
-resolver.onResolved(async chunk => {
+resolver.onAsyncResolved(async chunk => {
   await saveToClickhouse(chunk.table, await chunk.getRows())
 })
 
