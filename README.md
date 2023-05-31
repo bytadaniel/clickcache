@@ -36,6 +36,7 @@ const config = {
 
 const resolver = new ChunkResolver(new ProcessWatcher(), config)
 
+// sync method
 resolver.onResolved(chunk => {
   handleInsertion(
     chunk.table,
@@ -43,6 +44,11 @@ resolver.onResolved(chunk => {
       // fooboo
     })
   )
+})
+
+// enqueued async resolving
+resolver.onResolved(async chunk => {
+  await saveToClickhouse(chunk.table, await chunk.getRows())
 })
 
 onGracefulStutdown(() => resolver.resolveImmediately())
