@@ -103,6 +103,8 @@ export class Chunk {
 	 * @param {Row[]} rows
 	 */
 	public async $appendRows (rows: Row[]) {
+		this.size += rows.length
+
     await this.#dataWatcher.store({
       chunkId: this.id,
       table: this.table,

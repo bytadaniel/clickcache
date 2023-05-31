@@ -1,13 +1,18 @@
+/* eslint-disable no-async-promise-executor */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+/* eslint-disable no-constant-condition */
 import { EventEmitter } from 'stream'
 import { Chunk } from './chunk'
 import { ResolverOptions, InsertRow } from './interface'
 import { CacheError } from './errors'
 import { Events, E_CODES } from './constants'
-import { uniqBy } from './utils'
+import { sleep, uniqBy } from './utils'
 import { ChunkTracker } from './chunk-tracker/chunk-tracker'
 import { DataWatcher } from './watchers/abstract'
+import { Queue } from './queue/queue'
 
-type OnResolved = (chunk: Chunk) => void | Promise<void>
+type OnResolved = (chunk: Chunk) => void
+type OnResolvedAsync = (chunk: Chunk) => Promise<void>
 
 /**
  * ChunkResolver is the central element of the application,
@@ -20,6 +25,7 @@ export class ChunkResolver {
 	#options: ResolverOptions
 	#interval: NodeJS.Timer
 	#allowCache: boolean
+	#watchQueue: boolean
 
 	/**
 	 * Create ChunkResolver instance
@@ -36,7 +42,10 @@ export class ChunkResolver {
 		
 		this.#allowCache = true
 		this.#emitter = new EventEmitter()
-		this.#interval = setInterval(() => this.#resolveConditionally(), this.#options.checkIntervalMs)
+
+		this.#watchQueue = false
+		this.#interval = {} as NodeJS.Timer // pass
+		this.#start() // create real NodeJS.Timer
 	}
 
 	/**
@@ -50,8 +59,11 @@ export class ChunkResolver {
 	 * 4. Throwing then outside
 	 */
 	#resolveConditionally () {
+		let availableChunks = 0
 		for (const table of this.#chunkTracker.getTables()) {
 			const currentPoolSnapshot = this.#chunkTracker.getChunks(table)
+
+			availableChunks += currentPoolSnapshot.length
 	
 			const expiredChunks = currentPoolSnapshot.filter(chunk => chunk.isExpired())
 			const overfilledChunks = currentPoolSnapshot.filter(chunk => chunk.isOverfilled(this.#chunkTracker.maxSize))
@@ -64,6 +76,10 @@ export class ChunkResolver {
 			this.#chunkTracker.removeChunks(table, resolveChunks.map(chunk => chunk.id))
 	
 			resolveChunks.forEach(chunk => this.#emitter.emit(Events.ChunkResolved, chunk))
+		}
+
+		if (!availableChunks) {
+			this.stop()
 		}
 	}
 
@@ -127,9 +143,40 @@ export class ChunkResolver {
 	}
 
 	/**
+	 * Registers a listener for completely resolved chunks, allowing asynchronous processing.
+	 * This method continuously checks for resolved chunks in a queue and invokes the provided `onResolved` callback asynchronously for each chunk.
+	 * 
+	 * @param {OnResolvedAsync} onResolved - The asynchronous callback function to be invoked for each resolved chunk.
+	 */
+	public onAsyncResolved (onResolved: OnResolvedAsync) {
+		const queue = new Queue<Chunk>()
+		this.#emitter.on(Events.ChunkResolved, (chunk: Chunk) => queue.enqueue(chunk))
+
+		new Promise(async () => {
+			while (this.#watchQueue) {
+				if (queue.isEmpty()) {
+					await sleep(this.#options.checkIntervalMs)
+					continue
+				}
+	
+				await onResolved(queue.dequeue()!)
+			}
+		})
+	}
+
+	/**
+	 * Service method to start pending
+	 */
+	#start () {
+		this.#watchQueue = true
+		this.#interval = setInterval(() => this.#resolveConditionally(), this.#options.checkIntervalMs)
+	}
+
+	/**
 	 * Service method to cleanup memory
 	 */
 	public stop () {
+		this.#watchQueue = false
 		clearInterval(this.#interval)
 	}
 }

@@ -47,7 +47,7 @@ resolver.onResolved(chunk => {
 
 onGracefulStutdown(() => resolver.resolveImmediately())
 
-const chunk = resolver.cache('table', rows)
+const chunk = await resolver.cache('table', rows)
 
 chunk.isOverfilled() // boolean
 chunk.isExpired() // boolean

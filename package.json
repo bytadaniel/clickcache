@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "build": "rm -rf lib && tsc -d",
-    "test": "jest",
+    "test": "jest --detectOpenHandles",
     "coveralls": "coveralls",
     "lint": "eslint . --ext .ts"
   },
