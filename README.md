@@ -29,6 +29,10 @@ This cache collector will support of is actually supporting caching data
 - 🏗 in S3 Object Storage
 
 ## Usage
+```bash
+npm install clickcache
+```
+
 ```js
 const config = {
   ttlMs: 60_000,
