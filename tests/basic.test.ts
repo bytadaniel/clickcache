@@ -103,6 +103,7 @@ describe('Testing main functionality', () => {
 		await resolver.cache('table', rows)
 		await resolver.cache('table', rows)
 		await resolver.cache('table', rows)
+		await resolver.cache('table', rows)
 
 		await sleep(ttlMs*2)
 		resolver.stop()

@@ -1,5 +1,6 @@
 import { Chunk } from "../src/chunk";
 import { ChunkResolver } from "../src/chunk-resolver";
+import { sleep } from "../src/utils";
 import { ProcessWatcher } from "../src/watchers/process.watcher";
 
 describe('ChunkResolver', () => {
@@ -39,14 +40,14 @@ describe('ChunkResolver', () => {
     // Register the callback function with onAsyncResolved
     chunkResolver.onAsyncResolved(async (chunk) => {
       // Simulate an asynchronous operation
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await sleep(ttlMs)
       resolvedChunks.push(chunk);
     });
 
     await chunkResolver.cache('table1', [{}, {}, {}]);
 
     // Wait for the asynchronous operations to complete
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await sleep(ttlMs*5)
 
     expect(resolvedChunks[0].size).toEqual(3);
   });
