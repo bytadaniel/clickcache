@@ -13,9 +13,11 @@
 
 
 ## Why
-Hello! Some time ago I faced the problem of lack of quality Clickhouse software for Node.js
-Unfortunately, most of the clients contain a lot of bugs and are not supported. What frustrated me even more is that there are no packages for native batch insertion.
-For this reason, I decided to write this package - a universal batch insert engine specifically for Clickhouse!
+In my data work, I encountered the need for a straightforward way to asynchronously gather small pieces of data into larger batches and efficiently transmit them to Clickhouse.
+To address this requirement, I developed the `clickcache` package.
+
+`сlickcache` excels at working not only with the [official clickhouse client](https://github.com/ClickHouse/clickhouse-js) but also with third-party clients.
+It does so by delegating the read/write work to them while focusing on data aggregation in one central location and preparing it for insertion.
 
 ## Roadmap
 This module was tested in production for about a year being a part of [clickhouse-ts](https://www.npmjs.com/package/clickhouse-ts) package, my Clickhouse client.
@@ -27,6 +29,10 @@ This cache collector will support of is actually supporting caching data
 - 🏗 in S3 Object Storage
 
 ## Usage
+```bash
+npm install clickcache
+```
+
 ```js
 const config = {
   ttlMs: 60_000,
