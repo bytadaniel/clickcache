@@ -14,6 +14,9 @@
     "coveralls": "coveralls",
     "lint": "eslint . --ext .ts"
   },
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "keywords": [
     "clickhouse",
     "batch",
