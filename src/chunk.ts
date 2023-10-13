@@ -62,6 +62,10 @@ export class Chunk {
     return await this.#dataWatcher.getRowCount(this.id) >= limit
 	}
 
+	public isOverfilledSync (limit: number): boolean {
+		return this.#dataWatcher.getRowCountSync(this.id) >= limit
+	}
+
 	/**
 	 * Get state of block
 	 * 

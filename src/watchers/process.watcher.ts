@@ -28,6 +28,13 @@ export class ProcessWatcher extends DataWatcher {
   }
 
   public async getRowCount(chunkId: ChunkId): Promise<number> {
+    /**
+     * Process watcher realization does not need some kind of async row count query
+     */
+    return this.getRowCountSync(chunkId)
+  }
+
+  public getRowCountSync(chunkId: ChunkId): number {
     return this.#chunkStore[chunkId]?.length ?? 0
   }
 

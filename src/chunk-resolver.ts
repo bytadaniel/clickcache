@@ -65,7 +65,7 @@ export class ChunkResolver {
 			availableChunks += currentPoolSnapshot.length
 	
 			const expiredChunks = currentPoolSnapshot.filter(chunk => chunk.isExpired())
-			const overfilledChunks = currentPoolSnapshot.filter(chunk => chunk.isOverfilled(this.#chunkTracker.maxSize))
+			const overfilledChunks = currentPoolSnapshot.filter(chunk => chunk.isOverfilledSync(this.#chunkTracker.maxSize))
 	
 			expiredChunks.forEach(chunk => chunk.block())
 			overfilledChunks.forEach(chunk => chunk.block())
