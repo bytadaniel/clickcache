@@ -1,6 +1,5 @@
 # clickcache by @bytadaniel
 
-
 <a href="https://www.npmjs.com/package/clickcache" alt="NPM latest version"><img src="https://img.shields.io/npm/v/clickcache.svg"></a>
 <a href="https://www.npmjs.com/package/clickcache" alt="NPM total downloads"><img src="https://img.shields.io/npm/dt/clickcache.svg"></a>
 <a href="https://github.com/bytadaniel/clickcache" alt="Github stars"><img src="https://img.shields.io/github/stars/bytadaniel/clickcache.svg?style=social&label=Star"></a>
@@ -19,13 +18,11 @@ It does so by delegating the read/write work to them while focusing on data aggr
 
 ## Roadmap
 
-This module was tested in production for about a year being a part of [clickhouse-ts](https://www.npmjs.com/package/clickhouse-ts) package, my Clickhouse client.
-In order to clean up the code, I decided to separate theis caching module into its own repository.
 This cache collector will support of is actually supporting caching data
 
-- ✅ in the process memory
-- ✅ on the hard disk
-- 🏗 in the cloud
+- ✅ store data in the runtime process memory
+- ✅ store data in the system memory storage (on your disk)
+- 🏗 store data in the cloud (s3)
 
 ## Usage
 
@@ -80,9 +77,9 @@ This package contains some enities
 - `DataWatcher`
 - `Chunk`
 
-It collects many single rows by uning `ChunkResolver`, then arranges these rows to chunks. When the chunk is ready, `ChunkResolver` passes it to your your handlers, where you are able to prohibit database insertion
+It collects many single rows by uning `ChunkResolver`, then arranges these rows to chunks. When the chunk is ready, `ChunkResolver` passes it to your your handlers, where you are able to process database insertion
 
-`Chunk` has a relation with `ChunkRegistry` and `DataWatcher`
+`Chunk` has a relation to `ChunkRegistry` and `DataWatcher`
 
 `ChunkRegistry` is a in-memory storage shared within all parts of the core functionality. It contains chunk metadata such as chunk state (is blocked or not, is consistent or not, is expired or not etc) and chunk refs itself
 
