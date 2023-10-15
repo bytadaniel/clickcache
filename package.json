@@ -1,6 +1,6 @@
 {
   "name": "clickcache",
-  "version": "2.2.2",
+  "version": "3.0.0",
   "description": "Clickhouse data collector for delayed batch insert",
   "main": "lib/index.js",
   "files": [
