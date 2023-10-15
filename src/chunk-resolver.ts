@@ -1,18 +1,21 @@
+/* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable no-async-promise-executor */
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
-/* eslint-disable no-constant-condition */
-import { EventEmitter } from 'stream'
-import { Chunk } from './chunk'
+import cuid from 'cuid'
+import { Chunk } from './chunk/chunk'
 import { ResolverOptions, InsertRow } from './interface'
-import { CacheError } from './errors'
-import { Events, E_CODES } from './constants'
-import { sleep, uniqBy } from './utils'
-import { ChunkTracker } from './chunk-tracker/chunk-tracker'
+import { E_CODES } from './constants'
+import { ChunkRegistry } from './chunk-registry'
 import { DataWatcher } from './watchers/abstract'
 import { Queue } from './queue/queue'
+import { ScratchChunk } from './chunk/scratch-chunk'
+import { DiskWatcher } from './watchers/disk.watcher'
+import { ProcessWatcher } from './watchers/process.watcher'
+import { ChunkFacade } from './chunk/chunk-facade'
+import { CacheError } from './errors'
+import { sleep } from './utils'
 
-type OnResolved = (chunk: Chunk) => void
-type OnResolvedAsync = (chunk: Chunk) => Promise<void>
+type OnResolved = (chunk: ChunkFacade) => void
+type OnResolvedAsync = (chunk: ChunkFacade) => Promise<void>
 
 /**
  * ChunkResolver is the central element of the application,
@@ -20,70 +23,168 @@ type OnResolvedAsync = (chunk: Chunk) => Promise<void>
  * and provides an API for interacting "outside"
  */
 export class ChunkResolver {
-	#chunkTracker: ChunkTracker
-	#emitter: EventEmitter
-	#options: ResolverOptions
-	#interval: NodeJS.Timer | null
-	#allowCache: boolean
-	#watchQueue: boolean
+	readonly #dataWatcher: DataWatcher
+	readonly #registry: ChunkRegistry
+	readonly #options: ResolverOptions
+	readonly #handlers: Map<string, OnResolved | OnResolvedAsync>
+
+	#toResolveQueue: Queue<Chunk>
+	#watchingToResolveQueue: boolean
+	#watchingRegistry: boolean
 
 	/**
 	 * Create ChunkResolver instance
 	 * 
-	 * @param {DataWatcher} dataWatcher any type of watcher
 	 * @param {ResolverOptions} options 
 	 */
-	constructor (dataWatcher: DataWatcher, options: ResolverOptions) {
-		this.#chunkTracker = new ChunkTracker(dataWatcher)
+	constructor (options: ResolverOptions) {
+		const registry = new ChunkRegistry()
+
+		let dataWatcher: DataWatcher
+		switch (options.dataWatcher) {
+			case 'disk':
+				dataWatcher = new DiskWatcher(registry, {
+					outputDirectory: options.outputDirectory ?? './chunk'
+				})
+				break	
+			case 'process':
+				dataWatcher = new ProcessWatcher(registry)
+				break
+		}
+		
+		/**
+		 * Registry is a brain of the package
+		 * It stores metadata and relations and shares it to every part of system
+		 */
+		this.#registry = registry
+		/**
+		 * Data watcher is "the hands" off the package
+		 * It allows to this class to interact with stored data (memory, disk or cloud)
+		 */
+		this.#dataWatcher = dataWatcher
 		this.#options = options
 
-		this.#chunkTracker.setTtlMs(options.ttlMs)
-		this.#chunkTracker.setMaxSize(options.maxSize)
-		
-		this.#allowCache = true
-		this.#emitter = new EventEmitter()
+		this.#watchingToResolveQueue = false
+		this.#watchingRegistry = false
+	
 
-		this.#watchQueue = false
-		this.#interval = null
+		this.#handlers = new Map<string, OnResolved | OnResolvedAsync>()
+
+		/**
+		 * There is defined a queue to proceed chunks consistently
+		 */
+		this.#toResolveQueue = new Queue<Chunk>()
+
+		/**
+		 * On init we have to restore already existing data from watcher
+		 * and start pending
+		 */
+		dataWatcher.restore().then(async () => {
+			await this.#startWatching()
+		})
 	}
 
 	/**
-	 * Private method to resolve chunks
-	 * 1. Iterating evety chunk of every table to check
-	 * - if c hunck is overfilledby rows and reached the limit
-	 * - if chunk is expired by time
-	 * 
-	 * 2. Block all matched chunks
-	 * 3. Delete chunks from store
-	 * 4. Throwing then outside
+	 * A method to start a loop to check there are chunks in our registry
 	 */
-	#resolveConditionally () {
-		let availableChunks = 0
-		for (const table of this.#chunkTracker.getTables()) {
-			const currentPoolSnapshot = this.#chunkTracker.getChunks(table)
-
-			availableChunks += currentPoolSnapshot.length
-	
-			const expiredChunks = currentPoolSnapshot.filter(chunk => chunk.isExpired())
-			const overfilledChunks = currentPoolSnapshot.filter(chunk => chunk.isOverfilledSync(this.#chunkTracker.maxSize))
-	
-			expiredChunks.forEach(chunk => chunk.block())
-			overfilledChunks.forEach(chunk => chunk.block())
-	
-			const resolveChunks = uniqBy([...expiredChunks, ...overfilledChunks], chunk => chunk.id)
-	
-			this.#chunkTracker.removeChunks(table, resolveChunks.map(chunk => chunk.id))
-	
-			resolveChunks.forEach(chunk => this.#emitter.emit(Events.ChunkResolved, chunk))
-		}
-
-		if (!availableChunks) {
-			this.#interval && clearInterval(this.#interval)
+	async #startWatchingRegistry() {
+		if (!this.#watchingRegistry) {
+			this.#watchingRegistry = true
+			await this.#watchRegistry()
 		}
 	}
 
 	/**
-	 * Delayed insertion
+	 * It searches in a loop for come chunks which are ready to be resolved
+	 * The chunk is considered to be resolved if:
+	 * - it is expired by the time
+	 * - it has reached the size limit
+	 * - it is consistent (i.e it has no running async operations currently)
+	 * 
+	 * When the chunk matches conditions,
+	 * the system removes it from registry and puts to a resolve queue
+	 */
+	async #watchRegistry () {
+		while (!this.#registry.isEmpty()) {
+			const snapshot = this.#registry.getAll()
+
+			for (const state of snapshot) {
+				const isExpired = state.chunkRef.isExpired()
+				const isOverfilled = state.chunkRef.isOverfilled(this.#options.maxSize)
+				const isConsistent = state.chunkRef.isConsistent()
+
+				const canBlock = isExpired || isOverfilled
+				const canResolve = isConsistent && (isExpired || isOverfilled)
+
+				if (canBlock) {
+					state.chunkRef.block()
+				}
+
+				if (canResolve) {
+					this.#registry.unregister(state.chunkRef.id)
+					this.#toResolveQueue.enqueue(state.chunkRef)
+					await this.#startWatchingToResolveQueue()
+				}
+
+				await sleep(this.#options.checkIntervalMs)
+			}
+		}
+		this.#watchingRegistry = false
+	}
+
+	/**
+	 * A method to start a loop to pass chunks outside and resolve
+	 */
+	async #startWatchingToResolveQueue() {
+		if (!this.#watchingToResolveQueue) {
+			this.#watchingToResolveQueue = true
+			await this.#watchToResolveQueue()
+		}
+	}
+
+	/**
+	 * It handles chunks in a loop, one by one from queue
+	 * To pass chunk outside and then resolves it
+	 * 
+	 * Resolve is a required process to clenup chunk data from storage (process memory, disk space or cloud)
+	 */
+	async #watchToResolveQueue () {
+		while (!this.#toResolveQueue.isEmpty()) {
+			const chunk = this.#toResolveQueue.dequeue()
+			if (!chunk) {
+				continue
+			}
+
+			const handlers = [...this.#handlers.entries()]
+
+			if (!handlers.length) {
+				/**
+				 * there is no any handler to pass rows
+				 * stop next steps to avoid data lose
+				 */
+				throw new CacheError(E_CODES.E_NO_HANDLER)
+			}
+
+			// return to queue if chunk has inconsistent state
+			if (!chunk.isConsistent()) {
+				this.#toResolveQueue.enqueue(chunk)
+				continue
+			}
+
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			for (const [_handlerId, handler] of handlers) {
+				await handler(new ChunkFacade(chunk))
+			}
+
+			await chunk.resolve()
+		}
+		this.#watchingToResolveQueue = false
+	}
+
+	/**
+	 * Pass your data in this method to store it
+	 * 
+	 * It registers data in the system registry and saves it though the chosen data watcher
 	 * 
 	 * @warning This method does not guarantee the validation of the transmitted data,
 	 * which may subsequently affect the outcome of inserting a chunk into the DBMS.
@@ -94,93 +195,45 @@ export class ChunkResolver {
 	 * @returns 
 	 */
 	public async cache (table: string, rows: InsertRow[]) {
-		this.#start()
-
-		if (!this.#allowCache) {
-			throw new CacheError(E_CODES.E_CACHE_FORBIDDEN)
-		}
-		const unblockedChunk = this.#chunkTracker.getUnblockedChunk(table)
-
-		await unblockedChunk.$appendRows([...rows])
-
-		if (unblockedChunk.isExpired() || await unblockedChunk.isOverfilled(this.#chunkTracker.getMaxSize())) {
-			unblockedChunk.block()
-		}
-
-		return unblockedChunk
-	}
-
-	/**
-	 * Public method to resolve chunks
-	 * You can use it to provide graceful shutdown with forse insertion of all stored data
-	 * 
-	 * 1. Prohibition of caching in case if there is some concurrent workers
-	 * 2. Blocking all chunks to avoid concurrent insertion of rows
-	 * 3. Extracting all chunks from the store
-	 * 4. Throwing all chunks outside
-	 * 
-	 * @warning SIGKILL code can't be handled in Node and will lead you to loss of data
-	 */
-	public resolveImmediately () {
-		this.#allowCache = false
-
-		this.#chunkTracker.getTables().forEach(table => {
-			this.#chunkTracker.getChunks(table).forEach(chunk => {
-				chunk.block()
-				this.#chunkTracker.removeChunk(table, chunk.id)
-				this.#emitter.emit(Events.ChunkResolved, chunk)
+		let chunk = this.#registry.getAll().find(state => state.chunkRef.isUnblocked())?.chunkRef
+		if (!chunk) {
+			chunk = new ScratchChunk(this.#dataWatcher, {
+				table,
+				liveAtLeastMs: this.#options.ttlMs
 			})
+			this.#registry.register(chunk)
+		}
+
+		/**
+		 * This operation has to append rows to your watcher storage
+		 * For example, if you use disk storage, the system needs to make some save stuff
+		 * and we should consider that chunk is inconsistent while this stuff is not done 
+		 */
+		chunk.setConsistency(false)
+		await this.#dataWatcher.save({
+			chunkRef: chunk,
+			insertRows: rows
 		})
+		chunk.setConsistency(true)
+
+		this.#startWatching()
+
+		return chunk
 	}
 
 	/**
-	 * Wrapping emitter to handle completely resolved chunks
-	 * There you can bridge this cacher with your codebase and finish your insertion staff
-	 * 
-	 * @param {Function} onResolved
+	 * It registers a hadnler for resolved chunks
+	 * Pass @sync or @async callback and use it to save data to your DBMS
 	 */
-	public onResolved (onResolved: OnResolved) {
-		this.#emitter.on(Events.ChunkResolved, (chunk: Chunk) => onResolved(chunk))
-	}
-
-	/**
-	 * Registers a listener for completely resolved chunks, allowing asynchronous processing.
-	 * This method continuously checks for resolved chunks in a queue and invokes the provided `onResolved` callback asynchronously for each chunk.
-	 * 
-	 * @param {OnResolvedAsync} onResolved - The asynchronous callback function to be invoked for each resolved chunk.
-	 */
-	public onAsyncResolved (onResolved: OnResolvedAsync) {
-		this.#watchQueue = true
-		const queue = new Queue<Chunk>()
-		this.#emitter.on(Events.ChunkResolved, (chunk: Chunk) => queue.enqueue(chunk))
-
-		new Promise(async () => {
-			while (this.#watchQueue) {
-				if (queue.isEmpty()) {
-					await sleep(this.#options.checkIntervalMs)
-					continue
-				}
-	
-				await onResolved(queue.dequeue()!)
-			}
-		})
+	public onResolved(onResolved: OnResolved | OnResolvedAsync) {
+		this.#handlers.set(cuid(), onResolved)
 	}
 
 	/**
 	 * Service method to start pending
 	 */
-	#start () {
-		this.#watchQueue = true
-		if (!this.#interval) {
-			this.#interval = setInterval(() => this.#resolveConditionally(), this.#options.checkIntervalMs)
-		}
-	}
-
-	/**
-	 * Service method to cleanup memory
-	 */
-	public stop () {
-		this.#watchQueue = false
-		this.#interval && clearInterval(this.#interval)
+	async #startWatching () {
+		await this.#startWatchingRegistry()
+		await this.#startWatchingToResolveQueue()
 	}
 }

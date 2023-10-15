@@ -5,5 +5,7 @@ export type ChunkId = string
 export interface ResolverOptions {
 	ttlMs: number,
 	maxSize: number,
-	checkIntervalMs: number
+	checkIntervalMs: number,
+	dataWatcher: 'disk' | 'process'
+	outputDirectory?: string
 }

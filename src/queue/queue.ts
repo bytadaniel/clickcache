@@ -23,7 +23,8 @@ export class Queue<T> {
    * Removes and returns the element at the front of the Queue.
    * @returns The element removed from the Queue, or undefined if the Queue is empty.
    */
-  public dequeue(): T | undefined {
+  public dequeue(): T | undefined{
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return this.elements.shift();
   }
 

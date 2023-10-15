@@ -1,74 +1,61 @@
-import { DataWatcher, StoreContract } from "./abstract";
+import { DataWatcher, SaveContract, LoadContract } from "./abstract";
 import { RowContract } from "../row";
-import { EventEmitter } from "stream";
 import { ChunkId } from "../interface";
-
-enum Events {
-  Block = 'block',
-  Unblock = 'unblock'
-}
+import { WatcherEvents } from "../constants";
+import { ChunkRegistry } from "../chunk-tracker/chunk-registry";
 
 export class ProcessWatcher extends DataWatcher {
-  readonly #chunkStore: Record<ChunkId, RowContract[]>;
-  #writeable: boolean;
-  #emitter: EventEmitter;
+  readonly #registry: ChunkRegistry;
+  readonly #chunkRows: Record<ChunkId, RowContract[]>
 
-  constructor () {
+  constructor (registry: ChunkRegistry) {
     super();
-    this.#chunkStore = {}
-    this.#writeable = true
-    this.#emitter = new EventEmitter()
 
-    this.#emitter.on(Events.Block, () => this.#writeable = false)
-    this.#emitter.on(Events.Unblock, () => this.#writeable = true)
+    this.#chunkRows = {}
+    this.#registry = registry
   }
 
-  private async onUnblock() {
-    return new Promise<void>((resolve) => this.#emitter.on(Events.Unblock, resolve))
-  }
-
-  public async getRowCount(chunkId: ChunkId): Promise<number> {
-    /**
-     * Process watcher realization does not need some kind of async row count query
-     */
-    return this.getRowCountSync(chunkId)
-  }
-
-  public getRowCountSync(chunkId: ChunkId): number {
-    return this.#chunkStore[chunkId]?.length ?? 0
-  }
-
-  public async store(storeContract: StoreContract): Promise<void> {
-    if (!this.#chunkStore[storeContract.chunkId]) {
-      this.#chunkStore[storeContract.chunkId] = []
+  public async save(saveContract: SaveContract): Promise<void> {
+    if (!this.#registry.getOne(saveContract.chunkRef.id)) {
+      this.#registry.register(saveContract.chunkRef)
     }
 
-    !this.#writeable && await this.onUnblock()
-
-    this.#chunkStore[storeContract.chunkId].push(...storeContract.rows.map(row => {
-      return {
-        chunkId: storeContract.chunkId,
-        table: storeContract.table,
-        row
-      }
-    }))
-  }
-
-  public async restore(chunkId: ChunkId): Promise<StoreContract> {
-    this.#emitter.emit(Events.Block)
-
-    let rows: RowContract[] = []
-
-    if (this.#chunkStore[chunkId]) {
-      rows = this.#chunkStore[chunkId]
+    if (!this.$isWriteable()) {
+      await this.$toBeUnblocked()
     }
 
-    this.#emitter.emit(Events.Unblock)
+    if (!this.#chunkRows[saveContract.chunkRef.id]) {
+      this.#chunkRows[saveContract.chunkRef.id] = []
+    }
+
+    this.#chunkRows[saveContract.chunkRef.id].push(
+      ...saveContract.insertRows.map(row => {
+        return {
+          chunkId: saveContract.chunkRef.id,
+          table: saveContract.chunkRef.table,
+          row
+        }
+      })
+    )
+
+    this.#registry.increaseSize(saveContract.chunkRef.id, saveContract.insertRows.length)
+  }
+
+  public async load(chunkId: ChunkId): Promise<LoadContract> {
+    const loadedRows = this.#chunkRows[chunkId] ?? {}
 
     return {
-      chunkId,
-      table: rows[0]?.table ?? 'not known',
-      rows: rows.map(r => r.row)
+      loadedRows
     }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  public async cleanup(): Promise<void> {}
+
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  public async restore() {}
+
+  public countRows(chunkId: ChunkId): number {
+    return this.#registry.getOne(chunkId).size
   }
 }
