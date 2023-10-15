@@ -5,9 +5,9 @@
 <a href="https://www.npmjs.com/package/clickcache" alt="NPM latest version"><img src="https://img.shields.io/npm/v/clickcache.svg"></a>
 <a href="https://npms.io/search?q=clickcache" alt="NPM latest version"><img src="https://badges.npms.io/clickcache.svg"></a>
 <a href="https://www.npmjs.com/package/clickcache" alt="NPM total downloads"><img src="https://img.shields.io/npm/dt/clickcache.svg"></a>
-<a href="https://github.com/bytadaniel/node-clickcache" alt="Github stars"><img src="https://img.shields.io/github/stars/bytadaniel/node-clickcache.svg?style=social&label=Star"></a>
-<a href="https://github.com/bytadaniel/node-clickcache" alt="Github forks"><img src="https://img.shields.io/github/forks/bytadaniel/node-clickcache.svg?style=social&label=Fork"></a>
-<a href="https://github.com/bytadaniel/node-clickcache" alt="Github contributors"><img src="https://img.shields.io/github/contributors/bytadaniel/node-clickcache.svg"></a>
+<a href="https://github.com/bytadaniel/clickcache" alt="Github stars"><img src="https://img.shields.io/github/stars/bytadaniel/clickcache.svg?style=social&label=Star"></a>
+<a href="https://github.com/bytadaniel/clickcache" alt="Github forks"><img src="https://img.shields.io/github/forks/bytadaniel/clickcache.svg?style=social&label=Fork"></a>
+<a href="https://github.com/bytadaniel/clickcache" alt="Github contributors"><img src="https://img.shields.io/github/contributors/bytadaniel/clickcache.svg"></a>
 
 ![GitHub followers](https://img.shields.io/github/followers/bytadaniel?style=social)
 
