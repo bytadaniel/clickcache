@@ -3,11 +3,13 @@ import { sleep } from '../src/utils'
 
 function createResolver(): ChunkResolver {
   return new ChunkResolver({
+    chunkLifeMs: 5000,
+    chunkSize: 500,
+    checkIntervalMs: 1000,
     dataWatcher: 'disk',
-    outputDirectory: './chunks',
-    ttlMs: 5000,
-    maxSize: 500,
-    checkIntervalMs: 1000
+    disk: {
+      outputDirectory: './chunks',
+    }
   })
 }
 

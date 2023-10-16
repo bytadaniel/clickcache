@@ -1,15 +1,12 @@
-import { Chunk } from '../src/chunk/chunk'
 import { ChunkResolver } from '../src/chunk-resolver'
-import { ResolverOptions } from '../src/interface'
 import { sleep } from '../src/utils'
-import { ChunkFacade } from '../src/chunk/chunk-facade'
 
 function createResolver(): ChunkResolver {
   return new ChunkResolver({
+    chunkLifeMs: 500,
+    chunkSize: 500,
+    checkIntervalMs: 100,
     dataWatcher: 'process',
-    ttlMs: 500,
-    maxSize: 500,
-    checkIntervalMs: 100
   })
 }
 
