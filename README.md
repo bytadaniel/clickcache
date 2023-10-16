@@ -33,7 +33,7 @@ npm install clickcache
 ```js
 const config: ResolverOptions = {
   chunkLifeMs: 60000,           // Set the time to live limit for chunks
-  chunkSize: 1000,              // Set the max size limit for batches
+  chunkSize: 1000,              // Set the max size limit for chunks
   checkIntervalMs: 10000,       // Set the check interval. It is normal to check batches state 5-10 times per TTL
   dataWatcher: 'disk',          // Choose the way to store data
   disk: {
@@ -62,9 +62,6 @@ resolver.onResolved(async chunk => {
 })
 
 // use this method to cache a few rows or a single row
-// it will be stored and collected to a huuuge batch of data
-const chunk = await resolver.cache(myTable, rows)
-s or a single row
 // it will be stored and collected to a huuuge batch of data
 const chunk = await resolver.cache(myTable, rows)
 ```
