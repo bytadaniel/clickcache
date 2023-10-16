@@ -89,15 +89,6 @@ export class Chunk {
 			.then(load => load.loadedRows)
 	}
 
-  public async saveRows (rows: Row[]): Promise<void> {
-    await this.#dataWatcher
-      .save({
-        chunkRef: this,
-        insertRows: rows,
-      })
-      .then(() => this.size = this.#dataWatcher.countRows(this.id))
-  }
-
 	public async resolve() {
 		await this.#dataWatcher.cleanup(this.id)
 	}

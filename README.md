@@ -31,16 +31,14 @@ npm install clickcache
 ```
 
 ```js
-const config = {
-  // choose the way to store data
-  dataWatcher: 'process' // 'process' | 'disk'
-  // set the time to live limit for batches
-  ttlMs: 60_000,
-  // set the max size limit for batches
-  maxSize: 1_000,
-  // set the check interval
-  // it is normal to check batches state 5-10 times per TTL
-  checkIntervalMs: 10_000
+const config: ResolverOptions = {
+  chunkLifeMs: 60000,           // Set the time to live limit for chunks
+  chunkSize: 1000,              // Set the max size limit for batches
+  checkIntervalMs: 10000,       // Set the check interval. It is normal to check batches state 5-10 times per TTL
+  dataWatcher: 'disk',          // Choose the way to store data
+  disk: {
+    outputDirectory: './chunks' // Both absolute and relative path work
+  }
 }
 
 // define the singleton resolver instance
@@ -58,12 +56,15 @@ resolver.onResolved(chunk => {
 resolver.onResolved(async chunk => {
   const myRows = await chunk.loadRows()
   await clickhouseClient
-    .insertFunction(myTable, myRows)
+    .insertFunction(chunk.table, myRows)
     .then(() => console.log('Hurrah! My data is saved!'))
-    .catch(e => resolver.cache(myTable, myRows))
+    .catch(e => resolver.cache(chunk.table, myRows))
 })
 
 // use this method to cache a few rows or a single row
+// it will be stored and collected to a huuuge batch of data
+const chunk = await resolver.cache(myTable, rows)
+s or a single row
 // it will be stored and collected to a huuuge batch of data
 const chunk = await resolver.cache(myTable, rows)
 ```

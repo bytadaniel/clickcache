@@ -13,6 +13,7 @@ import { ProcessWatcher } from './watchers/process.watcher'
 import { ChunkFacade } from './chunk/chunk-facade'
 import { CacheError } from './errors'
 import { sleep } from './utils'
+import { ConfigError } from './errors/config.error'
 
 type OnResolved = (chunk: ChunkFacade) => void
 type OnResolvedAsync = (chunk: ChunkFacade) => Promise<void>
@@ -43,12 +44,18 @@ export class ChunkResolver {
 		let dataWatcher: DataWatcher
 		switch (options.dataWatcher) {
 			case 'disk':
+				if (!options.disk) {
+					throw new ConfigError(E_CODES.E_CONFIG_PARAM_REQUIRED)
+				}
 				dataWatcher = new DiskWatcher(registry, {
-					outputDirectory: options.outputDirectory ?? './chunk'
+					disk: options.disk,
+					chunkSize: options.chunkSize
 				})
 				break	
 			case 'process':
-				dataWatcher = new ProcessWatcher(registry)
+				dataWatcher = new ProcessWatcher(registry, {
+					chunkSize: options.chunkSize
+				})
 				break
 		}
 		
@@ -110,7 +117,7 @@ export class ChunkResolver {
 
 			for (const state of snapshot) {
 				const isExpired = state.chunkRef.isExpired()
-				const isOverfilled = state.chunkRef.isOverfilled(this.#options.maxSize)
+				const isOverfilled = state.chunkRef.isOverfilled(this.#options.chunkSize)
 				const isConsistent = state.chunkRef.isConsistent()
 
 				const canBlock = isExpired || isOverfilled
@@ -195,30 +202,34 @@ export class ChunkResolver {
 	 * @returns 
 	 */
 	public async cache (table: string, rows: InsertRow[]) {
-		let chunk = this.#registry.getAll().find(state => state.chunkRef.isUnblocked())?.chunkRef
-		if (!chunk) {
-			chunk = new ScratchChunk(this.#dataWatcher, {
-				table,
-				liveAtLeastMs: this.#options.ttlMs
+		while (rows.length > 0) {
+			let chunk = this.#registry.getAll().find(state => state.chunkRef.isUnblocked())?.chunkRef
+			if (!chunk) {
+				chunk = new ScratchChunk(this.#dataWatcher, {
+					table,
+					liveAtLeastMs: this.#options.chunkLifeMs
+				})
+				this.#registry.register(chunk)
+			}
+
+			const rowCountToOverfill = Math.abs(this.#options.chunkSize - chunk.size)
+
+			const chunkRows = rows.splice(0, rowCountToOverfill)
+
+			/**
+			 * This operation has to append rows to your watcher storage
+			 * For example, if you use disk storage, the system needs to make some save stuff
+			 * and we should consider that chunk is inconsistent while this stuff is not done 
+			 */
+			chunk.setConsistency(false)
+			await this.#dataWatcher.save({
+				chunkRef: chunk,
+				insertRows: chunkRows
 			})
-			this.#registry.register(chunk)
+			chunk.setConsistency(true)
 		}
 
-		/**
-		 * This operation has to append rows to your watcher storage
-		 * For example, if you use disk storage, the system needs to make some save stuff
-		 * and we should consider that chunk is inconsistent while this stuff is not done 
-		 */
-		chunk.setConsistency(false)
-		await this.#dataWatcher.save({
-			chunkRef: chunk,
-			insertRows: rows
-		})
-		chunk.setConsistency(true)
-
 		this.#startWatching()
-
-		return chunk
 	}
 
 	/**

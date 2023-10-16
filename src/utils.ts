@@ -19,3 +19,14 @@ export function uniqBy<T> (arr: T[], predicate: (item: T) => any): T[] {
 export async function sleep (ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+export function chunkList<T>(array: T[], size = 1): T[][] {
+	const arrayChunks: T[][] = []
+
+	for (let i = 0; i < array.length; i += size)	{
+		const arrayChunk = array.slice(i, i + size)
+		arrayChunks.push(arrayChunk);  
+	}
+
+	return arrayChunks
+}

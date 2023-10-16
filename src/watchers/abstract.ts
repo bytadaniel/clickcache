@@ -14,16 +14,25 @@ export interface SaveContract {
   insertRows: Row[]
 }
 
-export abstract class DataWatcher<SC extends SaveContract = SaveContract, LC extends LoadContract = LoadContract> {
-  // readonly $externalStore: Record<ChunkId, LoadContract>;
-  // readonly $memoryStore: Record<ChunkId, LoadContract & { rows: RowContract[] }>
-  $emitter: EventEmitter;
+export interface DataWatcherOptions {
+  chunkSize: number
+}
+
+export abstract class DataWatcher<
+  SC extends SaveContract = SaveContract,
+  LC extends LoadContract = LoadContract,
+  OP extends DataWatcherOptions = DataWatcherOptions
+> {
+  readonly $emitter: EventEmitter;
+  readonly $options: OP;
   #writeable: boolean;
 
-  constructor() {
-    this.$emitter = new EventEmitter()
+  constructor(options: OP) {
     this.#writeable = true
 
+    this.$emitter = new EventEmitter()
+    this.$options = options    
+    
     this.$emitter.on(WatcherEvents.Block, () => this.$setWriteable(false))
     this.$emitter.on(WatcherEvents.Unblock, () => this.$setWriteable(true))
   }

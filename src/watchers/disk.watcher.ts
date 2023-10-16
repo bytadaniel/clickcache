@@ -1,13 +1,15 @@
 import fs from 'fs'
 import path from 'path'
-import { DataWatcher, SaveContract, LoadContract } from "./abstract";
+import { DataWatcher, SaveContract, LoadContract, DataWatcherOptions } from "./abstract";
 import { promisify } from 'util';
 import { ExistingChunk } from '../chunk/existing-chunk';
 import { ChunkRegistry } from '../chunk-registry';
 import { Chunk } from '../chunk/chunk';
 
-export interface FsWatcherOptions {
-  outputDirectory: string
+export interface FsWatcherOptions extends DataWatcherOptions {
+  disk: {
+    outputDirectory: string
+  }
 }
 
 interface DiskLoadContract extends LoadContract {
@@ -27,12 +29,12 @@ const fsAppendFileAsync = promisify(fs.appendFile)
 const fsUnlinkAsync = promisify(fs.unlink)
 const fsReaddirAsync = promisify(fs.readdir)
 
-export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract> {
+export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract, FsWatcherOptions> {
   readonly #registry: ChunkRegistry;
   readonly #options: FsWatcherOptions;
   
   constructor(registry: ChunkRegistry, options: FsWatcherOptions) {
-    super()
+    super(options)
 
     this.#registry = registry
     this.#options = options
@@ -45,13 +47,13 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract> {
 
     saveContract.chunkRef.setConsistency(false)
 
-    const chunkDirectoryExists = await fsExistsAsync(this.#options.outputDirectory)
+    const chunkDirectoryExists = await fsExistsAsync(this.#options.disk.outputDirectory)
     if (!chunkDirectoryExists) {
-      await fsMkdirAsync(this.#options.outputDirectory)
+      await fsMkdirAsync(this.#options.disk.outputDirectory)
     }
 
     const chunkFilename = `${saveContract.chunkRef.id}.txt`
-    const chunkPathname = path.resolve(this.#options.outputDirectory, chunkFilename)
+    const chunkPathname = path.resolve(this.#options.disk.outputDirectory, chunkFilename)
 
     const chunkExists = await fsExistsAsync(chunkPathname)
     if (!chunkExists) {
@@ -81,7 +83,7 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract> {
 
   public async load(chunkId: string): Promise<DiskLoadContract> {
     const chunkFilename = `${chunkId}.txt`
-    const chunkPathname = path.resolve(this.#options.outputDirectory, chunkFilename)
+    const chunkPathname = path.resolve(this.#options.disk.outputDirectory, chunkFilename)
 
     const data = await fsReadFileAsync(chunkPathname, { encoding: 'utf8' })
 
@@ -102,12 +104,12 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract> {
   }
 
   public async restore(): Promise<void> {
-    const chunkDirectoryExists = await fsExistsAsync(this.#options.outputDirectory)
+    const chunkDirectoryExists = await fsExistsAsync(this.#options.disk.outputDirectory)
     if (!chunkDirectoryExists) {
       return
     }
 
-    const files = await fsReaddirAsync(this.#options.outputDirectory)
+    const files = await fsReaddirAsync(this.#options.disk.outputDirectory)
 
     for (const filename of files) {
       const isChunkFile = filename.includes('.txt')
@@ -125,7 +127,7 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract> {
 
   public async cleanup(chunkId: string): Promise<void> {
     const chunkFilename = `${chunkId}.txt`
-    const chunkPathname = path.resolve(this.#options.outputDirectory, chunkFilename)
+    const chunkPathname = path.resolve(this.#options.disk.outputDirectory, chunkFilename)
 
     await fsUnlinkAsync(chunkPathname)
   }

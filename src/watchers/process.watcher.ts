@@ -1,4 +1,4 @@
-import { DataWatcher, SaveContract, LoadContract } from "./abstract";
+import { DataWatcher, SaveContract, LoadContract, DataWatcherOptions } from "./abstract";
 import { RowContract } from "../row";
 import { ChunkId } from "../interface";
 import { ChunkRegistry } from "../chunk-registry";
@@ -7,8 +7,8 @@ export class ProcessWatcher extends DataWatcher {
   readonly #registry: ChunkRegistry;
   readonly #chunkRows: Record<ChunkId, RowContract[]>
 
-  constructor (registry: ChunkRegistry) {
-    super();
+  constructor (registry: ChunkRegistry, options: DataWatcherOptions) {
+    super(options);
 
     this.#chunkRows = {}
     this.#registry = registry
