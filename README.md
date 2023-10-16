@@ -11,6 +11,11 @@
 ## Run the clickcache dockerized server working from scratch
 - https://github.com/bytadaniel/clickcache-server.git
 
+## Contact me
+Please be free to open issues and create pull requests.
+Join the clickcache dev channel on Telegram and ask be about the project directly
+- https://t.me/clickcache
+
 ## Why
 
 In my data work, I encountered the need for a straightforward way to asynchronously gather small pieces of data into larger batches and efficiently transmit them to Clickhouse.
