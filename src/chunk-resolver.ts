@@ -32,6 +32,7 @@ export class ChunkResolver {
 	#toResolveQueue: Queue<Chunk>
 	#watchingToResolveQueue: boolean
 	#watchingRegistry: boolean
+	#commandStop: boolean
 
 	/**
 	 * Create ChunkResolver instance
@@ -73,6 +74,7 @@ export class ChunkResolver {
 
 		this.#watchingToResolveQueue = false
 		this.#watchingRegistry = false
+		this.#commandStop = false
 	
 
 		this.#handlers = new Map<string, OnResolved | OnResolvedAsync>()
@@ -89,6 +91,10 @@ export class ChunkResolver {
 		dataWatcher.restore().then(async () => {
 			await this.#startWatching()
 		})
+		/**
+		 * Enable graceful shutdown
+		 */
+		this.#setupShutdownHandler()
 	}
 
 	/**
@@ -112,16 +118,15 @@ export class ChunkResolver {
 	 * the system removes it from registry and puts to a resolve queue
 	 */
 	async #watchRegistry () {
-		while (!this.#registry.isEmpty()) {
+		while (!this.#registry.isEmpty() || this.#commandStop) {
 			const snapshot = this.#registry.getAll()
 
 			for (const state of snapshot) {
-				const isExpired = state.chunkRef.isExpired()
-				const isOverfilled = state.chunkRef.isOverfilled(this.#options.chunkSize)
+				const isReady = state.chunkRef.isReady()
 				const isConsistent = state.chunkRef.isConsistent()
 
-				const canBlock = isExpired || isOverfilled
-				const canResolve = isConsistent && (isExpired || isOverfilled)
+				const canBlock = isReady
+				const canResolve = isConsistent && isReady
 
 				if (canBlock) {
 					state.chunkRef.block()
@@ -130,7 +135,7 @@ export class ChunkResolver {
 				if (canResolve) {
 					this.#registry.unregister(state.chunkRef.id)
 					this.#toResolveQueue.enqueue(state.chunkRef)
-					await this.#startWatchingToResolveQueue()
+					this.#startWatchingToResolveQueue()
 				}
 
 				await sleep(this.#options.checkIntervalMs)
@@ -156,7 +161,7 @@ export class ChunkResolver {
 	 * Resolve is a required process to clenup chunk data from storage (process memory, disk space or cloud)
 	 */
 	async #watchToResolveQueue () {
-		while (!this.#toResolveQueue.isEmpty()) {
+		while (!this.#toResolveQueue.isEmpty() || this.#commandStop) {
 			const chunk = this.#toResolveQueue.dequeue()
 			if (!chunk) {
 				continue
@@ -178,12 +183,32 @@ export class ChunkResolver {
 				continue
 			}
 
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			for (const [_handlerId, handler] of handlers) {
-				await handler(new ChunkFacade(chunk))
+			while (!chunk.isConsistent()) {
+				continue
 			}
 
-			await chunk.resolve()
+			/**
+			 * Invoke chunk to all registered handlers
+			 */
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			const handlerPromises = handlers.map(([_handlerId, handlerFunction]) => {
+				/**
+				 * Convert sync callback to a Promise
+				 */
+				if (handlerFunction.constructor.name === 'AsyncFunction') {
+					return (handlerFunction as OnResolvedAsync)(new ChunkFacade(chunk))
+				} else {
+					return new Promise<ReturnType<OnResolved>>((resolve) => {
+						resolve((handlerFunction as OnResolved)(new ChunkFacade(chunk)))
+					})
+				}
+			})
+
+			await Promise.allSettled(handlerPromises)
+				.finally(async () => {
+					await chunk.resolve()
+				})
+
 		}
 		this.#watchingToResolveQueue = false
 	}
@@ -216,17 +241,11 @@ export class ChunkResolver {
 
 			const chunkRows = rows.splice(0, rowCountToOverfill)
 
-			/**
-			 * This operation has to append rows to your watcher storage
-			 * For example, if you use disk storage, the system needs to make some save stuff
-			 * and we should consider that chunk is inconsistent while this stuff is not done 
-			 */
-			chunk.setConsistency(false)
 			await this.#dataWatcher.save({
 				chunkRef: chunk,
 				insertRows: chunkRows
 			})
-			chunk.setConsistency(true)
+			
 		}
 
 		this.#startWatching()
@@ -238,6 +257,28 @@ export class ChunkResolver {
 	 */
 	public onResolved(onResolved: OnResolved | OnResolvedAsync) {
 		this.#handlers.set(cuid(), onResolved)
+	}
+
+	async #setupShutdownHandler() {
+		const handleSignal = (signal: NodeJS.Signals) => {
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			const signalHandler: NodeJS.BeforeExitListener = (code: number) => {
+				console.log(`Initialize chunks backup due to received ${signal} signal`)
+
+				// set pending off
+				this.#commandStop = true
+
+				// Syncronously backup runtime data
+				this.#dataWatcher.backup()
+
+				process.exit(0)
+			}
+
+			process.on(signal, signalHandler)
+		}
+
+		handleSignal('SIGTERM')
+		handleSignal('SIGINT')
 	}
 
 	/**

@@ -51,7 +51,10 @@ export abstract class DataWatcher<
 
   public abstract save (storeContract: SC): Promise<void>
   public abstract load(chunkId: ChunkId): Promise<LC>
+
+  public abstract backup(): void
   public abstract restore(): Promise<void>
+
   public abstract cleanup(chunkId: ChunkId): Promise<void>
 
   public abstract countRows(chunkId: ChunkId): number

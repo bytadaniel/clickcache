@@ -52,6 +52,9 @@ export class ProcessWatcher extends DataWatcher {
   public async cleanup(): Promise<void> {}
 
   // eslint-disable-next-line @typescript-eslint/no-empty-function
+  public backup(): void {}
+
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   public async restore() {}
 
   public countRows(chunkId: ChunkId): number {

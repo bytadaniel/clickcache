@@ -5,6 +5,9 @@ import { promisify } from 'util';
 import { ExistingChunk } from '../chunk/existing-chunk';
 import { ChunkRegistry } from '../chunk-registry';
 import { Chunk } from '../chunk/chunk';
+import { ChunkId } from '../interface';
+import { Row } from '../row';
+import cuid from 'cuid';
 
 export interface FsWatcherOptions extends DataWatcherOptions {
   disk: {
@@ -29,15 +32,23 @@ const fsAppendFileAsync = promisify(fs.appendFile)
 const fsUnlinkAsync = promisify(fs.unlink)
 const fsReaddirAsync = promisify(fs.readdir)
 
+type OperationId = string
+
 export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract, FsWatcherOptions> {
   readonly #registry: ChunkRegistry;
   readonly #options: FsWatcherOptions;
+  readonly #chunkRows: Record<ChunkId, Record<OperationId, Row[]>>
   
   constructor(registry: ChunkRegistry, options: FsWatcherOptions) {
     super(options)
 
     this.#registry = registry
     this.#options = options
+
+    /**
+     * Temporal cache storage using to save data on inconsistent period
+     */
+    this.#chunkRows = {}
   }
 
   public async save(saveContract: SaveContract): Promise<void> {
@@ -45,7 +56,13 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract, FsW
       await this.$toBeUnblocked()
     }
 
+    const operationId = cuid()
+
     saveContract.chunkRef.setConsistency(false)
+    if (!this.#chunkRows[saveContract.chunkRef.id]) {
+      this.#chunkRows[saveContract.chunkRef.id] = {}
+    }
+    this.#chunkRows[saveContract.chunkRef.id][operationId] = saveContract.insertRows
 
     const chunkDirectoryExists = await fsExistsAsync(this.#options.disk.outputDirectory)
     if (!chunkDirectoryExists) {
@@ -73,12 +90,15 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract, FsW
       .concat('\n')
 
     await fsAppendFileAsync(chunkPathname, storeData)
-      .then(() => this.#registry.increaseSize(
-        saveContract.chunkRef.id,
-        saveContract.insertRows.length
-      ))
+      .then(() => {
+        this.#registry.increaseSize(
+          saveContract.chunkRef.id,
+          saveContract.insertRows.length
+        )
+        saveContract.chunkRef.setConsistency(true)
+        delete this.#chunkRows[saveContract.chunkRef.id][operationId]
+      })
 
-    saveContract.chunkRef.setConsistency(true)
   }
 
   public async load(chunkId: string): Promise<DiskLoadContract> {
@@ -100,6 +120,46 @@ export class DiskWatcher extends DataWatcher<SaveContract, DiskLoadContract, FsW
         size: rows.length
       }),
       loadedRows: rows
+    }
+  }
+
+  public backup(): void {
+    for (const chunkId in this.#chunkRows) {
+      const chunkDirectoryExists = fs.existsSync(this.#options.disk.outputDirectory)
+      if (!chunkDirectoryExists) {
+        fs.mkdirSync(this.#options.disk.outputDirectory)
+      }
+
+      const chunkFilename = `${chunkId}.txt`
+      const chunkPathname = path.resolve(this.#options.disk.outputDirectory, chunkFilename)
+
+      const state = this.#registry.getOne(chunkId)
+
+      const chunkExists = fs.existsSync(chunkPathname)
+      if (!chunkExists) {
+        const metadata = {
+          table: state.chunkRef.table,
+          expiresAt: state.chunkRef.expiresAt
+        }
+        fs.writeFileSync(chunkPathname, `${JSON.stringify(metadata)}\n`)
+      }
+
+      for (const operationId in this.#chunkRows[chunkId]) {
+        const runtimeRows = this.#chunkRows[chunkId][operationId]
+
+        /**
+         * Need some kind of schema to optimize
+         */
+        const storeData = runtimeRows
+          .map(row => JSON.stringify(row))
+          .join('\n')
+          .concat('\n')
+
+        fs.appendFileSync(chunkPathname, storeData)
+        this.#registry.increaseSize(chunkId, runtimeRows.length)
+        state.chunkRef.setConsistency(true)
+        delete this.#chunkRows[chunkId][operationId]
+      }
     }
   }
 

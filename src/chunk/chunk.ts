@@ -28,6 +28,7 @@ export class Chunk {
 
 	blocked: boolean
 	consistent: boolean
+	forceReady: boolean
 
   #dataWatcher: DataWatcher
 
@@ -47,6 +48,7 @@ export class Chunk {
 
 		this.blocked = false
 		this.consistent = true
+		this.forceReady = false
 
 		this.createdAt = Date.now()
 		this.expiresAt = data.expiresAt
@@ -59,8 +61,8 @@ export class Chunk {
 		return Date.now() >= this.expiresAt
 	}
 
-	public isOverfilled (limit: number): boolean {
-    return this.#dataWatcher.countRows(this.id) >= limit
+	public isOverfilled (): boolean {
+    return this.#dataWatcher.countRows(this.id) >= this.#dataWatcher.$options.chunkSize
 	}
 
 	public isConsistent () {
@@ -70,6 +72,10 @@ export class Chunk {
 	public isUnblocked (): boolean {
 		return !this.blocked
 	}
+
+	public isReady (): boolean {
+		return this.forceReady || this.isExpired() || this.isOverfilled()
+	} 
 
 	public block () {
 		this.blocked = true
@@ -81,6 +87,10 @@ export class Chunk {
 
 	public setConsistency(state: boolean) {
 		this.consistent = state
+	}
+
+	public setReady() {
+		this.forceReady = true
 	}
 
 	public async loadRows (): Promise<Row[]> {
