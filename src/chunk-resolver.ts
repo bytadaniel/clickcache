@@ -2,7 +2,7 @@
 /* eslint-disable no-async-promise-executor */
 import cuid from 'cuid'
 import { Chunk } from './chunk/chunk'
-import { ResolverOptions, InsertRow } from './interface'
+import { ResolverOptions, InsertRow, Table } from './interface'
 import { E_CODES } from './constants'
 import { ChunkRegistry } from './chunk-registry'
 import { DataWatcher } from './watchers/abstract'
@@ -12,7 +12,7 @@ import { DiskWatcher } from './watchers/disk.watcher'
 import { ProcessWatcher } from './watchers/process.watcher'
 import { ChunkFacade } from './chunk/chunk-facade'
 import { CacheError } from './errors'
-import { sleep } from './utils'
+import { chunkList, sleep } from './utils'
 import { ConfigError } from './errors/config.error'
 
 type OnResolved = (chunk: ChunkFacade) => void
@@ -118,10 +118,7 @@ export class ChunkResolver {
 	 * the system removes it from registry and puts to a resolve queue
 	 */
 	async #watchRegistry () {
-		const hasElements = !this.#toResolveQueue.isEmpty()
-		const hasStopCommand = this.#commandStop
-
-		while (hasElements && !hasStopCommand) {
+		while (!this.#registry.isEmpty() && !this.#commandStop) {
 			const snapshot = this.#registry.getAll()
 
 			for (const state of snapshot) {
@@ -164,10 +161,7 @@ export class ChunkResolver {
 	 * Resolve is a required process to clenup chunk data from storage (process memory, disk space or cloud)
 	 */
 	async #watchToResolveQueue () {
-		const hasElements = !this.#toResolveQueue.isEmpty()
-		const hasStopCommand = this.#commandStop
-
-		while (hasElements && !hasStopCommand) {
+		while (!this.#toResolveQueue.isEmpty() && !this.#commandStop) {
 			const chunk = this.#toResolveQueue.dequeue()
 			if (!chunk) {
 				continue
@@ -233,25 +227,30 @@ export class ChunkResolver {
 	 * @returns 
 	 */
 	public async cache (table: string, rows: InsertRow[]) {
-		while (rows.length > 0) {
-			let chunk = this.#registry.getAll().find(state => state.chunkRef.isUnblocked())?.chunkRef
-			if (!chunk) {
-				chunk = new ScratchChunk(this.#dataWatcher, {
-					table,
-					liveAtLeastMs: this.#options.chunkLifeMs
+		const chunkedRowsList = chunkList(rows, this.#options.chunkSize)
+
+		for (const chunkedRows of chunkedRowsList) {			
+			while (chunkedRows.length) {
+				let chunk: Chunk | undefined = (this.#registry
+					.getAll()
+					.find(state => state.chunkRef.size < this.#options.chunkSize)
+				)?.chunkRef
+				if (!chunk) {
+					chunk = new ScratchChunk(this.#dataWatcher, {
+						table,
+						liveAtLeastMs: this.#options.chunkLifeMs
+					})
+					this.#registry.register(chunk)
+				}
+
+				const sizeToSave = Math.abs(this.#options.chunkSize - chunk.size)
+				const rowsToSave = chunkedRows.splice(0, sizeToSave)
+
+				await this.#dataWatcher.save({
+					chunkRef: chunk,
+					insertRows: rowsToSave
 				})
-				this.#registry.register(chunk)
-			}
-
-			const rowCountToOverfill = Math.abs(this.#options.chunkSize - chunk.size)
-
-			const chunkRows = rows.splice(0, rowCountToOverfill)
-
-			await this.#dataWatcher.save({
-				chunkRef: chunk,
-				insertRows: chunkRows
-			})
-			
+			}			
 		}
 
 		this.#startWatching()
@@ -275,7 +274,7 @@ export class ChunkResolver {
 				this.#commandStop = true
 
 				// Syncronously backup runtime data
-				this.#dataWatcher.backup()
+				this.#dataWatcher.backupRuntimeCache()
 
 				process.exit(0)
 			}
