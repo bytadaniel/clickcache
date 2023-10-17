@@ -118,7 +118,10 @@ export class ChunkResolver {
 	 * the system removes it from registry and puts to a resolve queue
 	 */
 	async #watchRegistry () {
-		while (!this.#registry.isEmpty() || this.#commandStop) {
+		const hasElements = !this.#toResolveQueue.isEmpty()
+		const hasStopCommand = this.#commandStop
+
+		while (hasElements && !hasStopCommand) {
 			const snapshot = this.#registry.getAll()
 
 			for (const state of snapshot) {
@@ -161,7 +164,10 @@ export class ChunkResolver {
 	 * Resolve is a required process to clenup chunk data from storage (process memory, disk space or cloud)
 	 */
 	async #watchToResolveQueue () {
-		while (!this.#toResolveQueue.isEmpty() || this.#commandStop) {
+		const hasElements = !this.#toResolveQueue.isEmpty()
+		const hasStopCommand = this.#commandStop
+
+		while (hasElements && !hasStopCommand) {
 			const chunk = this.#toResolveQueue.dequeue()
 			if (!chunk) {
 				continue
